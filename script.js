@@ -19,6 +19,7 @@ async function handleSubmit(event) {
     const endTimestamp = new Date(`${endDate}T${endTime}:00Z`).getTime();
 
     try {
+        clearErrorLog();
         const startTime = performance.now();
         let results;
         if (timeframe) {
@@ -33,7 +34,26 @@ async function handleSubmit(event) {
         displayResults(results, analysisTime, timeframe);
     } catch (error) {
         console.error('Error:', error);
-        alert('An error occurred. Please check the console for details.');
+        logError(`An error occurred: ${error.message}\n\nStack trace:\n${error.stack}`);
+    }
+}
+
+function logError(message) {
+    const errorLogElement = document.getElementById('error-log');
+    if (!errorLogElement) {
+        const errorLog = document.createElement('div');
+        errorLog.id = 'error-log';
+        errorLog.style.color = 'red';
+        errorLog.style.whiteSpace = 'pre-wrap';
+        document.body.appendChild(errorLog);
+    }
+    document.getElementById('error-log').textContent += message + '\n\n';
+}
+
+function clearErrorLog() {
+    const errorLogElement = document.getElementById('error-log');
+    if (errorLogElement) {
+        errorLogElement.textContent = '';
     }
 }
 
@@ -59,11 +79,18 @@ async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
 async function analyzeAllTimeframes(pair, startTimestamp, endTimestamp) {
     let bestResult = null;
     for (const timeframe of TIMEFRAMES) {
-        const historicalData = await fetchHistoricalData(pair, timeframe, startTimestamp, endTimestamp);
-        const result = analyzeTimeframe(historicalData, timeframe);
-        if (!bestResult || result.totalProfit > bestResult.totalProfit) {
-            bestResult = result;
+        try {
+            const historicalData = await fetchHistoricalData(pair, timeframe, startTimestamp, endTimestamp);
+            const result = analyzeTimeframe(historicalData, timeframe);
+            if (!bestResult || result.totalProfit > bestResult.totalProfit) {
+                bestResult = result;
+            }
+        } catch (error) {
+            logError(`Error analyzing timeframe ${timeframe}: ${error.message}`);
         }
+    }
+    if (!bestResult) {
+        throw new Error('Unable to analyze any timeframes');
     }
     return bestResult;
 }
