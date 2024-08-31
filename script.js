@@ -1,4 +1,5 @@
 const INITIAL_BALANCE = 100000;
+const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('trade-form');
@@ -19,13 +20,17 @@ async function handleSubmit(event) {
 
     try {
         const startTime = performance.now();
-        const historicalData = await fetchHistoricalData(pair, timeframe, startTimestamp, endTimestamp);
-        const { optimalTrades, entriesAndExitsTested, combinationsTested } = findOptimalTrades(historicalData);
-        const buyHoldInfo = calculateBuyHoldProfit(historicalData);
+        let results;
+        if (timeframe) {
+            const historicalData = await fetchHistoricalData(pair, timeframe, startTimestamp, endTimestamp);
+            results = analyzeTimeframe(historicalData, timeframe);
+        } else {
+            results = await analyzeAllTimeframes(pair, startTimestamp, endTimestamp);
+        }
         const endTime = performance.now();
         const analysisTime = (endTime - startTime) / 1000; // Convert to seconds
 
-        displayResults(optimalTrades, buyHoldInfo, entriesAndExitsTested, combinationsTested, analysisTime);
+        displayResults(results, analysisTime, timeframe);
     } catch (error) {
         console.error('Error:', error);
         alert('An error occurred. Please check the console for details.');
@@ -51,7 +56,19 @@ async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
     }));
 }
 
-function findOptimalTrades(data) {
+async function analyzeAllTimeframes(pair, startTimestamp, endTimestamp) {
+    let bestResult = null;
+    for (const timeframe of TIMEFRAMES) {
+        const historicalData = await fetchHistoricalData(pair, timeframe, startTimestamp, endTimestamp);
+        const result = analyzeTimeframe(historicalData, timeframe);
+        if (!bestResult || result.totalProfit > bestResult.totalProfit) {
+            bestResult = result;
+        }
+    }
+    return bestResult;
+}
+
+function analyzeTimeframe(data, timeframe) {
     const n = data.length;
     const entriesAndExitsTested = n * (n - 1);
     const combinationsTested = (n * (n - 1)) / 2;
@@ -87,20 +104,35 @@ function findOptimalTrades(data) {
     const optimalTrades = trades[n - 1] || [];
 
     // Convert trade indices to actual trade objects
-    const formattedTrades = optimalTrades.flatMap(trade => [
-        {
-            action: 'BUY',
+    const formattedTrades = optimalTrades.map(trade => ({
+        buy: {
             timestamp: new Date(data[trade.entry].timestamp).toISOString(),
             price: data[trade.entry].close
         },
-        {
-            action: 'SELL',
+        sell: {
             timestamp: new Date(data[trade.exit].timestamp).toISOString(),
             price: data[trade.exit].close
-        }
-    ]);
+        },
+        profit: (data[trade.exit].close - data[trade.entry].close) / data[trade.entry].close * INITIAL_BALANCE,
+        profitPercentage: ((data[trade.exit].close - data[trade.entry].close) / data[trade.entry].close) * 100
+    }));
 
-    return { optimalTrades: formattedTrades, entriesAndExitsTested, combinationsTested };
+    const totalProfit = formattedTrades.reduce((sum, trade) => sum + trade.profit, 0);
+    const averageProfitPercentage = formattedTrades.reduce((sum, trade) => sum + trade.profitPercentage, 0) / formattedTrades.length;
+    const bestTrade = formattedTrades.reduce((best, trade) => trade.profitPercentage > best.profitPercentage ? trade : best, formattedTrades[0]);
+
+    const buyHoldInfo = calculateBuyHoldProfit(data);
+
+    return {
+        timeframe,
+        optimalTrades: formattedTrades,
+        totalProfit,
+        averageProfitPercentage,
+        bestTrade,
+        buyHoldInfo,
+        entriesAndExitsTested,
+        combinationsTested
+    };
 }
 
 function calculateBuyHoldProfit(data) {
@@ -119,54 +151,68 @@ function calculateBuyHoldProfit(data) {
     };
 }
 
-function displayResults(optimalTrades, buyHoldInfo, entriesAndExitsTested, combinationsTested, analysisTime) {
+function displayResults(results, analysisTime, specifiedTimeframe) {
     const resultsDiv = document.getElementById('results');
+    const winningTimeframeDiv = document.getElementById('winning-timeframe');
     const optimalTradesDiv = document.getElementById('optimal-trades');
     const buyHoldDiv = document.getElementById('buy-hold');
     const statsDiv = document.getElementById('analysis-stats');
 
     resultsDiv.classList.remove('hidden');
 
-    if (optimalTrades.length > 0) {
-        let totalProfit = 0;
-        let tradesHtml = '<h3>Optimal Trades</h3>';
+    // Display Winning Timeframe
+    winningTimeframeDiv.innerHTML = `
+        <h3>Winning Timeframe</h3>
+        <p>${specifiedTimeframe ? 'Timeframe Selected' : results.timeframe}</p>
+    `;
 
-        for (let i = 0; i < optimalTrades.length; i += 2) {
-            const buyTrade = optimalTrades[i];
-            const sellTrade = optimalTrades[i + 1];
-            const profit = (sellTrade.price - buyTrade.price) / buyTrade.price * INITIAL_BALANCE;
-            totalProfit += profit;
+    // Display Optimal Trades Summary
+    if (results.optimalTrades.length > 0) {
+        let tradesHtml = `
+            <h3>Optimal Trades Summary</h3>
+            <p>Number of Trades: ${results.optimalTrades.length}</p>
+            <p>Total Profit: $${results.totalProfit.toFixed(2)} (${(results.totalProfit / INITIAL_BALANCE * 100).toFixed(2)}%)</p>
+            <p>Average Trade Profit: ${results.averageProfitPercentage.toFixed(2)}%</p>
+            <p>Best Individual Trade:</p>
+            <ul>
+                <li>Buy: ${results.bestTrade.buy.timestamp} at $${results.bestTrade.buy.price.toFixed(2)}</li>
+                <li>Sell: ${results.bestTrade.sell.timestamp} at $${results.bestTrade.sell.price.toFixed(2)}</li>
+                <li>Profit: $${results.bestTrade.profit.toFixed(2)} (${results.bestTrade.profitPercentage.toFixed(2)}%)</li>
+            </ul>
+            <h4>All Trades:</h4>
+        `;
 
+        results.optimalTrades.forEach((trade, index) => {
             tradesHtml += `
                 <div class="trade">
-                    <p>Buy: ${buyTrade.timestamp} at $${buyTrade.price.toFixed(2)}</p>
-                    <p>Sell: ${sellTrade.timestamp} at $${sellTrade.price.toFixed(2)}</p>
-                    <p>Profit: $${profit.toFixed(2)}</p>
+                    <p>Trade ${index + 1}:</p>
+                    <p>Buy: ${trade.buy.timestamp} at $${trade.buy.price.toFixed(2)}</p>
+                    <p>Sell: ${trade.sell.timestamp} at $${trade.sell.price.toFixed(2)}</p>
+                    <p>Profit: $${trade.profit.toFixed(2)} (${trade.profitPercentage.toFixed(2)}%)</p>
                 </div>
             `;
-        }
-
-        const totalProfitPercentage = (totalProfit / INITIAL_BALANCE) * 100;
-        tradesHtml += `<p>Total Profit: $${totalProfit.toFixed(2)} (${totalProfitPercentage.toFixed(2)}%)</p>`;
+        });
 
         optimalTradesDiv.innerHTML = tradesHtml;
     } else {
         optimalTradesDiv.innerHTML = '<p>No profitable trades found.</p>';
     }
 
+    // Display Buy and Hold Info
     buyHoldDiv.innerHTML = `
         <h3>Buy and Hold</h3>
-        <p>Start Date: ${buyHoldInfo.startDate}</p>
-        <p>End Date: ${buyHoldInfo.endDate}</p>
-        <p>Start Price: $${buyHoldInfo.startPrice.toFixed(2)}</p>
-        <p>End Price: $${buyHoldInfo.endPrice.toFixed(2)}</p>
-        <p>Profit: $${buyHoldInfo.profit.toFixed(2)} (${buyHoldInfo.profitPercentage.toFixed(2)}%)</p>
+        <p>Start Date: ${results.buyHoldInfo.startDate}</p>
+        <p>End Date: ${results.buyHoldInfo.endDate}</p>
+        <p>Start Price: $${results.buyHoldInfo.startPrice.toFixed(2)}</p>
+        <p>End Price: $${results.buyHoldInfo.endPrice.toFixed(2)}</p>
+        <p>Profit: $${results.buyHoldInfo.profit.toFixed(2)} (${results.buyHoldInfo.profitPercentage.toFixed(2)}%)</p>
     `;
 
+    // Display Analysis Statistics
     statsDiv.innerHTML = `
         <h3>Analysis Statistics</h3>
-        <p>Entries and Exits Tested: ${entriesAndExitsTested.toLocaleString()}</p>
-        <p>Trade Combinations Tested: ${combinationsTested.toLocaleString()}</p>
+        <p>Entries and Exits Tested: ${results.entriesAndExitsTested.toLocaleString()}</p>
+        <p>Trade Combinations Tested: ${results.combinationsTested.toLocaleString()}</p>
         <p>Time to Complete Analysis: ${analysisTime.toFixed(2)} seconds</p>
     `;
 }
