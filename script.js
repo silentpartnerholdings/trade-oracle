@@ -1,5 +1,6 @@
 const INITIAL_BALANCE = 100000;
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
+const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
 
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('trade-form');
@@ -58,22 +59,36 @@ function clearErrorLog() {
 }
 
 async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
-    const url = `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=${timeframe}&startTime=${startTime}&endTime=${endTime}&limit=1000`;
-    const response = await fetch(url);
+    const apiUrl = `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=${timeframe}&startTime=${startTime}&endTime=${endTime}&limit=1000`;
+    const proxyUrl = `${CORS_PROXY}${apiUrl}`;
 
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    try {
+        const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.map(candle => ({
+            timestamp: candle[0],
+            open: parseFloat(candle[1]),
+            high: parseFloat(candle[2]),
+            low: parseFloat(candle[3]),
+            close: parseFloat(candle[4]),
+            volume: parseFloat(candle[5])
+        }));
+    } catch (error) {
+        if (error.message.includes('Failed to fetch')) {
+            throw new Error('Unable to fetch data. This may be due to CORS restrictions. Please ensure you have permission to access the Binance.US API or try using a local development server.');
+        }
+        throw error;
     }
-
-    const data = await response.json();
-    return data.map(candle => ({
-        timestamp: candle[0],
-        open: parseFloat(candle[1]),
-        high: parseFloat(candle[2]),
-        low: parseFloat(candle[3]),
-        close: parseFloat(candle[4]),
-        volume: parseFloat(candle[5])
-    }));
 }
 
 async function analyzeAllTimeframes(pair, startTimestamp, endTimestamp) {
