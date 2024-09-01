@@ -62,13 +62,16 @@ async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
 
     try {
         const response = await fetch(url);
+        const data = await response.json();
 
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+            throw new Error(`HTTP error! status: ${response.status}, message: ${JSON.stringify(data)}`);
         }
 
-        const data = await response.json();
+        if (data.error) {
+            throw new Error(`API error: ${data.error}\nDetails: ${JSON.stringify(data.details)}\nURL: ${data.url}`);
+        }
+
         return data.map(candle => ({
             timestamp: candle[0],
             open: parseFloat(candle[1]),

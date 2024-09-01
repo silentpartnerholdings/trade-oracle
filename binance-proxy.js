@@ -9,12 +9,23 @@ exports.handler = async function(event, context) {
     const response = await axios.get(url);
     return {
       statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify(response.data)
     };
   } catch (error) {
+    console.error('Error in binance-proxy:', error);
     return {
       statusCode: error.response ? error.response.status : 500,
-      body: JSON.stringify({ error: error.message })
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        error: error.message,
+        details: error.response ? error.response.data : null,
+        url: url
+      })
     };
   }
 };
