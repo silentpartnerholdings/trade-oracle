@@ -58,7 +58,7 @@ function clearErrorLog() {
 }
 
 async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
-    const url = `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=${timeframe}&startTime=${startTime}&endTime=${endTime}&limit=1000`;
+    const url = `/.netlify/functions/binance-proxy?symbol=${pair}&interval=${timeframe}&startTime=${startTime}&endTime=${endTime}&limit=1000`;
 
     try {
         const response = await fetch(url);
