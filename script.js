@@ -1,6 +1,5 @@
 const INITIAL_BALANCE = 100000;
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
-const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
 
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('trade-form');
@@ -59,19 +58,14 @@ function clearErrorLog() {
 }
 
 async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
-    const apiUrl = `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=${timeframe}&startTime=${startTime}&endTime=${endTime}&limit=1000`;
-    const proxyUrl = `${CORS_PROXY}${apiUrl}`;
+    const url = `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=${timeframe}&startTime=${startTime}&endTime=${endTime}&limit=1000`;
 
     try {
-        const response = await fetch(proxyUrl, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
+        const response = await fetch(url);
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorText = await response.text();
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
         }
 
         const data = await response.json();
@@ -84,9 +78,7 @@ async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
             volume: parseFloat(candle[5])
         }));
     } catch (error) {
-        if (error.message.includes('Failed to fetch')) {
-            throw new Error('Unable to fetch data. This may be due to CORS restrictions. Please ensure you have permission to access the Binance.US API or try using a local development server.');
-        }
+        logError(`Error fetching data for ${pair} with timeframe ${timeframe}:\n${error.message}`);
         throw error;
     }
 }
