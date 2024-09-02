@@ -1,4 +1,4 @@
-const INITIAL_BALANCE = 100000;
+const INITIAL_BALANCE = 1000;
 
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('trade-form');
