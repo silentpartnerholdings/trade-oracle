@@ -1,4 +1,4 @@
-const INITIAL_BALANCE = 100000;
+const INITIAL_BALANCE = 1000;
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,8 +15,9 @@ async function handleSubmit(event) {
     const endDate = document.getElementById('end-date').value;
     const endTime = document.getElementById('end-time').value;
 
-    const startTimestamp = new Date(`${startDate}T${startTime}:00Z`).getTime();
-    const endTimestamp = new Date(`${endDate}T${endTime}:00Z`).getTime();
+    // Ensure UTC timezone is used and milliseconds are considered
+    const startTimestamp = new Date(`${startDate}T${startTime}:00.000Z`).getTime();
+    const endTimestamp = new Date(`${endDate}T${endTime}:00.000Z`).getTime();
 
     try {
         clearErrorLog();
@@ -58,7 +59,7 @@ function clearErrorLog() {
 }
 
 async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
-    const url = `/.netlify/functions/binance-proxy?symbol=${pair}&interval=${timeframe}&startTime=${startTime}&endTime=${endTime}&limit=1000`;
+    const url = `https://api.binance.us/api/v3/klines?symbol=${pair}&interval=${timeframe}&startTime=${startTime}&endTime=${endTime}&limit=1000`;
 
     try {
         const response = await fetch(url);
@@ -66,10 +67,6 @@ async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}, message: ${JSON.stringify(data)}`);
-        }
-
-        if (data.error) {
-            throw new Error(`API error: ${data.error}\nDetails: ${JSON.stringify(data.details)}\nURL: ${data.url}`);
         }
 
         return data.map(candle => ({
@@ -192,8 +189,8 @@ function displayResults(results, analysisTime, specifiedTimeframe) {
     const resultsDiv = document.getElementById('results');
     const winningTimeframeDiv = document.getElementById('winning-timeframe');
     const optimalTradesDiv = document.getElementById('optimal-trades');
-    const buyHoldDiv = document.getElementById('buy-hold');
-    const statsDiv = document.getElementById('analysis-stats');
+    the buyHoldDiv = document.getElementById('buy-hold');
+    the statsDiv = document.getElementById('analysis-stats');
 
     resultsDiv.classList.remove('hidden');
 
