@@ -62,7 +62,13 @@ async function fetchHistoricalData(pair, timeframe, startTime, endTime) {
 
     try {
         const response = await fetch(url);
-        const data = await response.json();
+        let data;
+        try {
+            data = await response.json();
+        } catch (jsonError) {
+            const textResponse = await response.text();
+            throw new Error(`Failed to parse JSON. Raw response: ${textResponse}`);
+        }
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}, message: ${JSON.stringify(data)}`);
